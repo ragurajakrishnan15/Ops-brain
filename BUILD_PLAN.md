@@ -179,3 +179,27 @@ series switching); `streamlit run` boots and `/_stcore/health` returns ok. Note:
 | Quarto CLI | github.com/quarto-dev/quarto-cli (zip; pip wheel fails on Windows) | ✅ `D:\opsbrain-project	ools\quarto` |
 | Gemini API key | aistudio.google.com/apikey (free tier) | **user must provide** |
 | R + reticulate | CRAN | not needed — notebook and README are Python-only |
+
+---
+
+## Phase 7 — Recruiter-ready deployment (2026-11-10)
+
+Driven by a Planning Analyst JD (Python/R data products, SQL/Snowflake, statistics + ML, Gen AI/LLM
+products, reproducibility, Git/CI, Posit Connect, supply chain).
+
+1. [x] **Browser QA** (Playwright, every page): fixed 8 UI defects — truncated KPI, repeated chart colors,
+   raw timestamps, discontinued series shown without warning, "%" vs. "pts", unreadable SHAP waterfall,
+   noisy default risk ranking, missing thousands separators.
+2. [x] **Statistical rigor:** Diebold–Mariano tests (Newey–West HAC, lag 27) per series + Benjamini–Hochberg:
+   XGBoost significantly better on 5/30, moving average on 0, no difference on 25. Late-delivery drivers:
+   chi-square + Cramér's V, logistic regression with odds-ratio CIs, likelihood-ratio test (extra drivers p = 0.71);
+   First Class perfect separation handled explicitly. New "Statistical Tests" page.
+3. [x] **Landing story:** Overview opens with what the project is and five live-computed findings.
+4. [x] **Deploy-readiness:** PyTorch dropped (Chroma's ONNX MiniLM gives identical embeddings, cosine 1.0);
+   models load from any location (MLflow absolute paths resolved against the tracking root);
+   18 MB data bundle (`scripts/build_bundle.py`) downloaded on first start with checksum + zip-slip guard;
+   slow tables precomputed into the bundle (cold start 23 s → 13 s including download);
+   assistant limits (10/visit, 200/day, 500 chars); root `streamlit_app.py` entry point for Posit Connect Cloud.
+   **Verified:** a fresh copy with no data downloads the bundle and renders every page without errors.
+5. [ ] Publish the `data-v1` release asset; enable GitHub Pages (`main` / `docs`); publish on Posit Connect
+   Cloud with `GOOGLE_API_KEY`; add the live link to the README.

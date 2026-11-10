@@ -1,8 +1,42 @@
 """Operations Assistant — chat over the data (SQL) and documents (RAG)."""
 
+import os
+import threading
+from datetime import date
+
 import streamlit as st
 
 from src.utils.config import GOOGLE_API_KEY
+
+# Guardrails for a public demo running on one API key
+SESSION_LIMIT = int(os.getenv("ASSISTANT_SESSION_LIMIT", "10"))
+DAILY_LIMIT = int(os.getenv("ASSISTANT_DAILY_LIMIT", "200"))
+MAX_QUESTION_CHARS = 500
+
+
+@st.cache_resource
+def _daily_usage() -> dict:
+    """Questions asked today across all visitors (shared by every session in this server)."""
+    return {"day": date.today(), "count": 0, "lock": threading.Lock()}
+
+
+def _take_quota() -> str | None:
+    """Reserve one question; return a message if a limit is reached."""
+    if st.session_state.get("questions_asked", 0) >= SESSION_LIMIT:
+        return (
+            f"This demo allows {SESSION_LIMIT} questions per visit to keep the shared API key "
+            "within its free quota. Refresh the page to start a new session."
+        )
+    usage = _daily_usage()
+    with usage["lock"]:
+        if usage["day"] != date.today():
+            usage["day"], usage["count"] = date.today(), 0
+        if usage["count"] >= DAILY_LIMIT:
+            return "The demo's daily question limit has been reached. Please try again tomorrow."
+        usage["count"] += 1
+    st.session_state["questions_asked"] = st.session_state.get("questions_asked", 0) + 1
+    return None
+
 
 EXAMPLES = [
     "Which 5 categories had the most late deliveries in 2017?",
@@ -14,7 +48,8 @@ EXAMPLES = [
 st.header("Operations Assistant")
 st.caption(
     "Ask about supply chain data or operations documents. Data questions are answered with a "
-    "read-only SQL query; document questions with retrieval over the SOPs (cited by section)."
+    "read-only SQL query; document questions with retrieval over the SOPs (cited by section). "
+    f"Demo limit: {SESSION_LIMIT} questions per visit."
 )
 
 if not GOOGLE_API_KEY:
@@ -70,6 +105,15 @@ if not st.session_state.messages and not prompt:
     for col, example in zip(cols, EXAMPLES):
         if col.button(example, use_container_width=True):
             prompt = example
+
+if prompt and len(prompt) > MAX_QUESTION_CHARS:
+    st.warning(f"Please keep questions under {MAX_QUESTION_CHARS} characters.")
+    prompt = None
+
+limit_message = _take_quota() if prompt else None
+if limit_message:
+    st.warning(limit_message)
+    prompt = None
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})

@@ -8,6 +8,7 @@ Runs without the real dataset.
 """
 
 from datetime import date, timedelta
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -136,3 +137,23 @@ def test_recursive_forecast_matches_one_step_on_first_day(trained):
     recursive = recursive_forecast(model, units[units.index < origin], horizon=3)
     one_step = predict_units(model, features[features["order_date"] == origin])
     assert recursive.iloc[0] == pytest.approx(one_step[0])
+
+
+def test_models_load_after_mlruns_is_moved(trained, tmp_path, monkeypatch):
+    """MLflow stores absolute artifact paths; a copied mlruns/ (Docker, cloud deploy) must still load."""
+    import shutil
+    from urllib.parse import unquote, urlparse
+
+    src_uri = urlparse(predict.MLFLOW_TRACKING_URI)
+    src_root = Path(unquote(src_uri.path.lstrip("/") if src_uri.path[2:3] == ":" else src_uri.path))
+    moved = tmp_path / "moved_mlruns"
+    shutil.copytree(src_root, moved)
+    monkeypatch.setattr(predict, "MLFLOW_TRACKING_URI", moved.as_uri())
+    predict.load_series.cache_clear()
+
+    run_id = predict.list_trained_series()["run_id"].iloc[0]
+    artifacts = predict._run_artifact_dir(run_id)
+    assert moved in artifacts.parents
+    model, meta, holdout = predict.load_series("category", CATEGORY)
+    assert meta["series_name"] == CATEGORY and len(holdout) > 0
+    predict.load_series.cache_clear()

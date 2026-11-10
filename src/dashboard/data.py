@@ -93,8 +93,9 @@ def model_features(level: str, name: str) -> pd.DataFrame:
 @st.cache_data(ttl=TTL, show_spinner=False)
 def forecast_health() -> pd.DataFrame:
     from src.forecasting.alerts import forecast_health as compute
+    from src.utils import precompute
 
-    return compute()
+    return precompute.table("forecast_health", compute, precompute.models_fingerprint)
 
 
 @st.cache_data(ttl=TTL, show_spinner=False)
@@ -116,6 +117,68 @@ def null_rates() -> pd.DataFrame:
     from src.data_pipeline.quality import null_rates as compute
 
     return compute()
+
+
+@st.cache_data(ttl=TTL, show_spinner=False)
+def significance_table() -> pd.DataFrame:
+    from src.forecasting.significance import significance_table as compute
+    from src.utils import precompute
+
+    return precompute.table("significance", compute, precompute.models_fingerprint)
+
+
+@st.cache_data(ttl=TTL, show_spinner=False)
+def late_delivery_analysis() -> dict:
+    from src.utils import precompute
+
+    return precompute.late_delivery()
+
+
+@st.cache_data(ttl=TTL, show_spinner=False)
+def key_findings() -> dict:
+    """Headline numbers for the landing page, computed from the warehouse."""
+    from src.utils.config import MODEL_END_DATE
+
+    end = MODEL_END_DATE
+    row = run_query_df(f"""
+        WITH monthly AS (
+            SELECT DATE_TRUNC('month', order_date) AS m, SUM(total_units) AS u
+            FROM daily_demand GROUP BY 1
+        ),
+        weekday AS (
+            SELECT EXTRACT(DOW FROM order_date) AS d, AVG(u) AS u
+            FROM (SELECT order_date, SUM(total_units) AS u FROM daily_demand
+                  WHERE order_date <= DATE '{end}' GROUP BY 1)
+            GROUP BY 1
+        ),
+        lag_corr AS (
+            SELECT AVG(c) AS within, (SELECT CORR(lag_7d_units, total_units) FROM demand_features
+                                      WHERE order_date <= DATE '{end}') AS pooled
+            FROM (SELECT CORR(lag_7d_units, total_units) AS c FROM demand_features
+                  WHERE order_date <= DATE '{end}' GROUP BY category_name HAVING COUNT(*) >= 365)
+        )
+        SELECT
+            (SELECT AVG(u) FROM monthly WHERE m >= DATE '2017-11-01') /
+            (SELECT AVG(u) FROM monthly WHERE m BETWEEN DATE '2017-04-01' AND DATE '2017-09-01')
+                - 1 AS break_change,
+            (SELECT MAX(u) / MIN(u) - 1 FROM weekday) AS weekday_spread,
+            (SELECT within FROM lag_corr) AS lag7_within,
+            (SELECT pooled FROM lag_corr) AS lag7_pooled,
+            (SELECT 100 * AVG(late_delivery_risk) FROM orders
+             WHERE is_valid_demand AND shipping_mode = 'First Class') AS first_class_late,
+            (SELECT 100 * AVG(late_delivery_risk) FROM orders
+             WHERE is_valid_demand AND shipping_mode = 'Standard Class') AS standard_late
+    """).iloc[0]
+    findings = {k: float(v) for k, v in row.items()}
+
+    try:
+        sig = significance_table()
+        findings["series_tested"] = len(sig)
+        findings["xgb_significantly_better"] = int((sig["verdict"] == "XGBoost better").sum())
+        findings["ma_significantly_better"] = int((sig["verdict"] == "Moving average better").sum())
+    except Exception:
+        findings["series_tested"] = 0
+    return findings
 
 
 SETUP_HINT = "Run the data pipeline first:\n\n```bash\npython scripts/setup_data.py\n```"

@@ -9,8 +9,10 @@ all from the series' champion method, with 95% intervals calibrated on
 rolling backtests (see train.py).
 """
 
+import json
 from functools import lru_cache
-from io import StringIO
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import mlflow
 import mlflow.xgboost
@@ -83,14 +85,31 @@ def load_series(level: str, name: str, run_id: str | None = None) -> tuple:
             )
         run_id = match.iloc[0]["run_id"]
 
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    model = mlflow.xgboost.load_model(f"runs:/{run_id}/model")
-    meta = mlflow.artifacts.load_dict(f"runs:/{run_id}/forecast_meta.json")
-    holdout = pd.read_csv(
-        StringIO(mlflow.artifacts.load_text(f"runs:/{run_id}/holdout.csv")),
-        parse_dates=["order_date"],
-    )
+    artifacts = _run_artifact_dir(run_id)
+    model = mlflow.xgboost.load_model(str(artifacts / "model"))
+    meta = json.loads((artifacts / "forecast_meta.json").read_text(encoding="utf-8"))
+    holdout = pd.read_csv(artifacts / "holdout.csv", parse_dates=["order_date"])
     return model, meta, holdout
+
+
+def _run_artifact_dir(run_id: str) -> Path:
+    """
+    Local artifact folder of a run in the file-based tracking store.
+
+    MLflow records each run's artifact location as an absolute path at training
+    time, which breaks when mlruns/ is copied to another machine (Docker, cloud
+    deploys). The store layout is always <root>/<experiment_id>/<run_id>/artifacts,
+    so resolve it relative to the tracking root actually in use.
+    """
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    run = mlflow.get_run(run_id)
+    uri = urlparse(MLFLOW_TRACKING_URI)
+    root = Path(unquote(uri.path.lstrip("/") if uri.path[2:3] == ":" else uri.path))
+    local = root / run.info.experiment_id / run_id / "artifacts"
+    if local.exists():
+        return local
+    # Not a local file store (e.g. a tracking server): download the artifacts instead
+    return Path(mlflow.artifacts.download_artifacts(run_id=run_id))
 
 
 def _with_bounds(df: pd.DataFrame, widths: list[float]) -> pd.DataFrame:

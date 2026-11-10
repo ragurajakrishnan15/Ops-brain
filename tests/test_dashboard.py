@@ -21,6 +21,7 @@ PAGES = {
     "forecasts": "Demand Forecasts",
     "inventory_risk": "Inventory Risk Assessment",
     "data_quality": "Data Quality",
+    "statistics": "Statistical Tests",
     "assistant": "Operations Assistant",
 }
 
@@ -37,9 +38,9 @@ def _run(page: str) -> AppTest:
 
 
 def test_app_registers_every_view():
-    app = (PROJECT_ROOT / "src" / "dashboard" / "app.py").read_text(encoding="utf-8")
+    app = (PROJECT_ROOT / "streamlit_app.py").read_text(encoding="utf-8")
     for page in PAGES:
-        assert f'"views/{page}.py"' in app
+        assert f"{{VIEWS}}/{page}.py" in app
         assert (VIEWS / f"{page}.py").exists()
 
 

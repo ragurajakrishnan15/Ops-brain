@@ -14,26 +14,38 @@ from pathlib import Path
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 from src.utils.config import CHROMA_PERSIST_DIR, DOCS_DIR
 
-# Embedding model — runs locally, no API key needed
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# Embedding model — all-MiniLM-L6-v2, run locally through Chroma's ONNX runtime (no API key,
+# no PyTorch). Produces the same normalized vectors as sentence-transformers' version of the model.
+EMBEDDING_MODEL = "all-MiniLM-L6-v2 (ONNX)"
 COLLECTION_NAME = "ops_docs"
 
 HEADERS = [("#", "h1"), ("##", "h2"), ("###", "h3")]
 
 
+class MiniLMEmbeddings(Embeddings):
+    """LangChain wrapper around Chroma's bundled ONNX MiniLM embedder."""
+
+    def __init__(self) -> None:
+        from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+
+        self._embed = ONNXMiniLM_L6_V2()
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[float(x) for x in vector] for vector in self._embed(texts)]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_documents([text])[0]
+
+
 @lru_cache(maxsize=1)
-def get_embeddings() -> HuggingFaceEmbeddings:
-    """Initialize the embedding model (loaded once per process)."""
-    return HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True},
-    )
+def get_embeddings() -> MiniLMEmbeddings:
+    """Initialize the embedding model (loaded once per process; downloads ~80 MB on first use)."""
+    return MiniLMEmbeddings()
 
 
 def load_documents(docs_dir: Path | None = None) -> list[Document]:

@@ -24,28 +24,26 @@ jobs:
           cache: pip
           cache-dependency-path: requirements*.txt
 
-      - name: Cache Hugging Face models
+      - name: Cache embedding model
         uses: actions/cache@v4
         with:
-          path: ~/.cache/huggingface
-          key: hf-all-MiniLM-L6-v2
+          path: ~/.cache/chroma/onnx_models
+          key: chroma-onnx-all-MiniLM-L6-v2
 
-      - name: Install dependencies (CPU-only torch)
-        run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
 
       - name: Lint with Ruff
         run: |
-          ruff check src/ tests/ scripts/
-          ruff format --check src/ tests/ scripts/
+          ruff check src/ tests/ scripts/ streamlit_app.py
+          ruff format --check src/ tests/ scripts/ streamlit_app.py
 
       # Tests that need the real Kaggle dataset, trained models or a Gemini key skip themselves;
       # the pipeline, forecasting and assistant code is covered by synthetic-data tests.
       - name: Run tests with coverage
         run: |
           pytest tests/ -v --tb=short -rs \
-            --cov=src/data_pipeline --cov=src/forecasting --cov=src/rag_assistant --cov=src/utils \
+            --cov=src/data_pipeline --cov=src/forecasting --cov=src/rag_assistant --cov=src/utils --cov=src/analytics \
             --cov-report=term --cov-report=xml --cov-fail-under=70
 
       - name: Check imports

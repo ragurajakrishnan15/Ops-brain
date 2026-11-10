@@ -1,6 +1,4 @@
 # Runtime dependencies. Dev/test tools: requirements-dev.txt
-# On Linux, install CPU-only torch first to avoid ~2 GB of CUDA wheels:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 # Core
 python-dotenv==1.1.0
@@ -11,6 +9,8 @@ duckdb==1.2.2
 pandas==2.2.3  # keep <3: duckdb 1.2.2 can't scan pandas 3 string columns
 tabulate==0.9.0  # DataFrame.to_markdown() in the chat assistant
 numpy==1.26.4
+scipy==1.17.1
+statsmodels==0.15.0  # 0.14.x is incompatible with scipy 1.17
 
 # ML & Forecasting
 scikit-learn==1.6.1
@@ -27,9 +27,7 @@ langchain-google-genai==2.1.12
 protobuf==5.29.6  # keep the version chromadb/mlflow were installed with; langchain-google-genai alone would pull 7.x
 langchain-community==0.3.24
 langchain-chroma==0.2.3
-langchain-huggingface==0.3.1
 chromadb==0.6.3
-sentence-transformers==3.4.1
 
 # Dashboard
 streamlit==1.42.2

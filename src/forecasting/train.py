@@ -49,6 +49,7 @@ from src.forecasting.features import (
     recursive_forecast,
     seasonal_naive_forecast,
 )
+from src.forecasting.significance import compare_methods
 from src.utils.config import (
     FORECAST_HORIZON_DAYS,
     MIN_HISTORY_DAYS,
@@ -254,6 +255,12 @@ def train_series(
     holdout = rolling_backtest(features, units, params, [holdout_start], horizon)
     holdout_metrics = {m: score(g, widths[m]) for m, g in holdout.groupby("method")}
 
+    # Is XGBoost's accuracy difference from the moving average statistically real?
+    # Backtests + holdout form one run of consecutive days, paired by date.
+    significance = compare_methods(
+        pd.concat([cv, holdout]), "xgboost", "moving_average", lag=horizon - 1
+    )
+
     # 5. Final model on all data up to MODEL_END_DATE
     final_model = fit_model(features, params)
 
@@ -261,7 +268,8 @@ def train_series(
     print(
         f"{level:>10} {name:<24} champion={champion:<15} "
         f"holdout WAPE xgb={h['xgboost']['wape']:.3f} ma28={h['moving_average']['wape']:.3f} "
-        f"naive7={h['seasonal_naive']['wape']:.3f} | coverage={h[champion]['coverage']:.2f}"
+        f"naive7={h['seasonal_naive']['wape']:.3f} | coverage={h[champion]['coverage']:.2f} "
+        f"| DM p={significance['p_value']:.2f}"
     )
 
     meta = {
@@ -276,6 +284,7 @@ def train_series(
         "cv_wape": cv_wape,
         "holdout": holdout_metrics,
         "interval_widths": widths,
+        "significance": {"xgboost_vs_moving_average": significance},
     }
 
     if log_mlflow:
@@ -300,8 +309,12 @@ def train_series(
                     mlflow.log_metric(f"holdout_{key}_{method}", value)
             for key, value in holdout_metrics[champion].items():
                 mlflow.log_metric(f"holdout_{key}", value)
+            mlflow.log_metric("dm_stat_xgb_vs_ma", significance["stat"])
+            mlflow.log_metric("dm_pvalue_xgb_vs_ma", significance["p_value"])
+            mlflow.log_metric("dm_mean_abs_error_diff_xgb_vs_ma", significance["mean_diff"])
             mlflow.log_dict(meta, "forecast_meta.json")
             mlflow.log_text(holdout.to_csv(index=False), "holdout.csv")
+            mlflow.log_text(cv.to_csv(index=False), "backtest.csv")
             mlflow.xgboost.log_model(final_model, artifact_path="model")
 
     return {"model": final_model, **meta, "best_params": params}
@@ -333,6 +346,7 @@ def summarize(results: list[dict]) -> pd.DataFrame:
                 "champion": r["champion"],
                 **{f"wape_{m}": round(r["holdout"][m]["wape"], 3) for m in METHODS},
                 "coverage": round(r["holdout"][r["champion"]]["coverage"], 2),
+                "dm_pvalue": round(r["significance"]["xgboost_vs_moving_average"]["p_value"], 3),
             }
             for r in results
         ]

@@ -69,7 +69,7 @@ def main():
     print("=" * 60)
     print("\nNext steps:")
     print("  1. Train forecasting models:  python -m src.forecasting.train")
-    print("  2. Launch dashboard:          streamlit run src/dashboard/app.py")
+    print("  2. Launch dashboard:          streamlit run streamlit_app.py")
     print("  3. (Optional) View MLflow:    mlflow ui")
 
 

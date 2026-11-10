@@ -42,3 +42,6 @@ htmlcov/
 
 # Quarto render cache
 notebooks/.quarto/
+
+# Deployment bundle
+dist/

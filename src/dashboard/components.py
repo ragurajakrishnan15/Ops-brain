@@ -296,3 +296,47 @@ def risk_scatter(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=60, r=20, t=50, b=50),
     )
     return fig
+
+
+def interval_plot(
+    labels: list[str],
+    estimates,
+    lows,
+    highs,
+    title: str,
+    x_title: str,
+    reference: float = 0.0,
+    log_x: bool = False,
+    colors: list[str] | None = None,
+) -> go.Figure:
+    """Forest plot: one point estimate with its confidence interval per row."""
+    estimates, lows, highs = (np.asarray(v, float) for v in (estimates, lows, highs))
+    fig = go.Figure(
+        go.Scatter(
+            x=estimates,
+            y=labels,
+            mode="markers",
+            marker=dict(size=8, color=colors or COLORS["primary"]),
+            error_x=dict(
+                type="data",
+                symmetric=False,
+                array=highs - estimates,
+                arrayminus=estimates - lows,
+                color=COLORS["gray"],
+                thickness=1.2,
+            ),
+            hovertemplate="%{y}: %{x:.2f}<extra></extra>",
+        )
+    )
+    fig.add_vline(x=reference, line=dict(color=COLORS["gray"], dash="dot", width=1))
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_title,
+        xaxis_type="log" if log_x else "linear",
+        template="plotly_white",
+        height=90 + 24 * len(labels),
+        margin=dict(l=210, r=30, t=50, b=50),
+        yaxis=dict(autorange="reversed"),
+        showlegend=False,
+    )
+    return fig
