@@ -50,8 +50,8 @@ An operations intelligence platform combining demand forecasting, interactive da
 You need the Kaggle CSV and, for the assistant, a free [Gemini API key](https://aistudio.google.com/apikey).
 
 ```bash
-git clone https://github.com/ragurajakrishnan15/opsbrain.git
-cd opsbrain
+git clone https://github.com/ragurajakrishnan15/Ops-brain.git
+cd Ops-brain
 # Put DataCoSupplyChainDataset.csv in data/raw/
 cp .env.example .env          # then set GOOGLE_API_KEY
 ```
