@@ -3,12 +3,264 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpsBrain — EDA Report</title>
-  <meta http-equiv="refresh" content="0; url=eda.html">
-  <link rel="canonical" href="eda.html">
+  <title>OpsBrain — Supply Chain Analytics & AI Assistant</title>
+  <meta name="description" content="End-to-end supply chain analytics product: SQL warehouse, demand forecasting benchmarked with significance tests, late-delivery statistics, data quality checks and an LLM assistant (text-to-SQL + RAG). Live Streamlit demo.">
+  <meta property="og:title" content="OpsBrain — Supply Chain Analytics & AI Assistant">
+  <meta property="og:description" content="Demand forecasting, statistical tests and a Gen AI assistant on 180k supply chain orders. Live demo, code and EDA report.">
+  <meta property="og:image" content="assets/overview.webp">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232563eb'/><rect x='7' y='16' width='4' height='9' rx='1' fill='white'/><rect x='14' y='10' width='4' height='15' rx='1' fill='white'/><rect x='21' y='6' width='4' height='19' rx='1' fill='white'/></svg>">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --faint: #94a3b8;
+      --border: #e2e8f0;
+      --accent: #2563eb;
+      --accent-text: #ffffff;
+      --accent-soft: #dbeafe;
+      --good: #047857;
+      --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0b1120;
+        --surface: #111a2e;
+        --text: #e2e8f0;
+        --muted: #a7b3c6;
+        --faint: #64748b;
+        --border: #1e293b;
+        --accent: #60a5fa;
+        --accent-text: #0b1120;
+        --accent-soft: #172554;
+        --good: #34d399;
+        --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0b1120; --surface: #111a2e; --text: #e2e8f0; --muted: #a7b3c6; --faint: #64748b;
+      --border: #1e293b; --accent: #60a5fa; --accent-text: #0b1120; --accent-soft: #172554;
+      --good: #34d399; --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+    header { padding: 56px 0 32px; }
+    .eyebrow { color: var(--muted); font-size: 14px; letter-spacing: 0.02em; margin: 0 0 8px; }
+    h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+    .lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 760px; margin: 0 0 28px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 18px; border-radius: 10px; font-weight: 600; text-decoration: none;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+    .note { color: var(--faint); font-size: 14px; margin: 14px 0 0; }
+
+    section { padding: 28px 0; }
+    h2 { font-size: 24px; margin: 0 0 16px; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); margin: -8px 0 20px; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px; box-shadow: var(--shadow);
+    }
+    .stat .num { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+    .stat .label { font-weight: 600; margin: 6px 0 4px; }
+    .stat p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .shots { display: grid; gap: 24px; }
+    figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+    figure img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--border); background: #fff; }
+    figcaption { padding: 14px 18px; color: var(--muted); font-size: 15px; }
+    figcaption strong { color: var(--text); }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+    .card h3 { margin: 0 0 8px; font-size: 18px; }
+    .card ul { margin: 0; padding-left: 18px; color: var(--muted); }
+    .card li { margin: 4px 0; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { background: var(--accent-soft); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+
+    footer { border-top: 1px solid var(--border); margin-top: 32px; padding: 24px 0 48px; color: var(--muted); font-size: 14px; }
+    footer p { margin: 6px 0; }
+
+    @media (prefers-reduced-motion: reduce) { .btn:hover { transform: none; } }
+  </style>
 </head>
 <body>
-  <p>Redirecting to the <a href="eda.html">OpsBrain exploratory data analysis report</a>…
-     The code is on <a href="https://github.com/ragurajakrishnan15/Ops-brain">GitHub</a>.</p>
+  <main class="wrap">
+    <header>
+      <p class="eyebrow">Portfolio project · Raguraja Krishnan Natarajan Mangaleshwaran</p>
+      <h1>OpsBrain</h1>
+      <p class="lede">
+        An end-to-end supply chain analytics product on 180,000 real-world-style order lines:
+        a SQL warehouse, demand forecasting benchmarked with significance tests, a statistical
+        analysis of late deliveries, data quality checks, and an LLM assistant that answers
+        questions with SQL or from operations documents.
+      </p>
+      <div class="actions">
+        <a class="btn primary" href="https://01a1c78c-8f0c-74d3-e258-bbc95be5f54d.share.connect.posit.cloud/">Open the live demo →</a>
+        <a class="btn" href="eda.html">Read the EDA report</a>
+        <a class="btn" href="https://github.com/ragurajakrishnan15/Ops-brain">View the code on GitHub</a>
+      </div>
+      <p class="note">The demo is hosted on Posit Connect Cloud and may take about 20 seconds to wake up on first visit.</p>
+    </header>
+
+    <section aria-labelledby="findings">
+      <h2 id="findings">Key findings</h2>
+      <p class="sub">Every number below is computed from the data and shown in the dashboard.</p>
+      <div class="stats">
+        <div class="stat">
+          <div class="num">100%</div>
+          <div class="label">of First Class orders arrive late</div>
+          <p>Promised in 1 day, shipped in 2. Logistic regression: shipping mode explains late deliveries; market, segment, department, quantity and discount add nothing (LR test p = 0.71).</p>
+        </div>
+        <div class="stat">
+          <div class="num">5 of 30</div>
+          <div class="label">series where XGBoost is significantly better</div>
+          <p>Diebold–Mariano tests (Newey–West errors, Benjamini–Hochberg FDR) vs. a 28-day moving average. No significant difference on 25; the average never wins significantly.</p>
+        </div>
+        <div class="stat">
+          <div class="num">0.01</div>
+          <div class="label">within-category lag-7 correlation</div>
+          <p>Demand is close to noise around a stable level (0.89 pooled only reflects size differences), which is why the honest answer is a per-series champion, not a bigger model.</p>
+        </div>
+        <div class="stat">
+          <div class="num">95%</div>
+          <div class="label">prediction-interval coverage</div>
+          <p>Intervals calibrated on out-of-sample backtest errors at each horizon, then checked on a 28-day holdout no model saw.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="screens">
+      <h2 id="screens">Inside the dashboard</h2>
+      <div class="shots">
+        <figure>
+          <img src="assets/overview.webp" width="1400" height="1143" loading="lazy"
+               alt="OpsBrain overview page with the project summary, five key findings, KPIs and a monthly demand chart by department">
+          <figcaption><strong>Overview.</strong> The story first: what the project is, the key findings, KPIs, and the October 2017 catalog change that sets the modelling window.</figcaption>
+        </figure>
+        <div class="two">
+          <figure>
+            <img src="assets/forecasts.webp" width="1400" height="1143" loading="lazy"
+                 alt="Demand forecast for the Cleats category showing history, a 28-day holdout and a 28-day future forecast with a 95% interval">
+            <figcaption><strong>Demand forecasts.</strong> History, out-of-sample holdout and the next 28 days with 95% intervals, for 24 categories and 6 departments.</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/drivers.webp" width="1400" height="1143" loading="lazy"
+                 alt="SHAP feature importance bar chart and a waterfall explaining a single day's forecast">
+            <figcaption><strong>Explainability.</strong> SHAP shows which signals move each forecast away from the 28-day average, in units.</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/statistics.webp" width="1400" height="1143" loading="lazy"
+                 alt="Forest plot of Diebold-Mariano test results comparing XGBoost and a moving average for 30 series">
+            <figcaption><strong>Is the model really better?</strong> Diebold–Mariano tests with confidence intervals for all 30 series.</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/late_delivery.webp" width="1400" height="1143" loading="lazy"
+                 alt="Chi-square tests with Cramér's V, logistic regression odds ratios and scheduled versus actual shipping days">
+            <figcaption><strong>What drives late deliveries?</strong> Chi-square tests with effect sizes and a logistic regression with odds-ratio intervals.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="inside">
+      <h2 id="inside">What's in the project</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>SQL data pipeline</h3>
+          <ul>
+            <li>DuckDB warehouse with Snowflake-style window functions</li>
+            <li>Dense daily demand, leakage-free lag features</li>
+            <li>PII removed; canceled and fraud orders excluded</li>
+            <li>16 data quality rules from a written standard</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Forecasting</h3>
+          <ul>
+            <li>XGBoost vs. moving average vs. seasonal naive</li>
+            <li>Optuna tuning, six rolling backtests, 28-day holdout</li>
+            <li>Champion per series; calibrated 95% intervals</li>
+            <li>MLflow tracking and SHAP explanations</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Statistics</h3>
+          <ul>
+            <li>Diebold–Mariano tests with HAC standard errors</li>
+            <li>Benjamini–Hochberg multiple-testing control</li>
+            <li>Chi-square tests with Cramér's V effect sizes</li>
+            <li>Logistic regression and likelihood-ratio test</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Gen AI assistant</h3>
+          <ul>
+            <li>Router sends questions to text-to-SQL or RAG</li>
+            <li>SQL sandbox: one read-only SELECT, no file access</li>
+            <li>RAG over 7 SOPs with file and section citations</li>
+            <li>Google Gemini via LangChain; local embeddings</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Data product</h3>
+          <ul>
+            <li>Six-page Streamlit dashboard on Posit Connect Cloud</li>
+            <li>Forecast health alerts against planning targets</li>
+            <li>Reproducible EDA report in Quarto</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Engineering</h3>
+          <ul>
+            <li>74 tests, incl. synthetic-data pipeline and model tests</li>
+            <li>GitHub Actions: lint, coverage gate, Docker build</li>
+            <li>Docker image; data bundle for one-click deploys</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="stack">
+      <h2 id="stack">Tech stack</h2>
+      <div class="chips">
+        <span class="chip">Python</span><span class="chip">SQL</span><span class="chip">DuckDB</span>
+        <span class="chip">pandas</span><span class="chip">XGBoost</span><span class="chip">scikit-learn</span>
+        <span class="chip">Optuna</span><span class="chip">statsmodels</span><span class="chip">SciPy</span>
+        <span class="chip">SHAP</span><span class="chip">MLflow</span><span class="chip">LangChain</span>
+        <span class="chip">ChromaDB</span><span class="chip">Google Gemini</span><span class="chip">Streamlit</span>
+        <span class="chip">Plotly</span><span class="chip">Quarto</span><span class="chip">Posit Connect Cloud</span>
+        <span class="chip">Docker</span><span class="chip">GitHub Actions</span><span class="chip">pytest</span>
+      </div>
+    </section>
+
+    <footer>
+      <p>Data: <a href="https://data.mendeley.com/datasets/8gx2fvg2k6">DataCo Smart Supply Chain for Big Data Analysis</a> (Constante, Silva &amp; Pereira, Mendeley Data), CC BY 4.0. The operations documents are written for this project.</p>
+      <p><a href="https://github.com/ragurajakrishnan15/Ops-brain">github.com/ragurajakrishnan15/Ops-brain</a></p>
+    </footer>
+  </main>
 </body>
 </html>

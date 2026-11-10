@@ -2,7 +2,7 @@
 
 An operations intelligence platform combining demand forecasting, statistical analysis, interactive dashboards, and an LLM-powered assistant for supply chain analytics. Built end to end: SQL data pipeline, forecasting with honest out-of-sample evaluation and significance tests, a sandboxed text-to-SQL agent plus RAG over operations documents, and a Streamlit data product.
 
-**Live demo:** [OpsBrain on Posit Connect Cloud](https://01a1c78c-8f0c-74d3-e258-bbc95be5f54d.share.connect.posit.cloud/) · **EDA report:** [ragurajakrishnan15.github.io/Ops-brain/eda.html](https://ragurajakrishnan15.github.io/Ops-brain/eda.html)
+**Project page:** [ragurajakrishnan15.github.io/Ops-brain](https://ragurajakrishnan15.github.io/Ops-brain/) · **Live demo:** [OpsBrain on Posit Connect Cloud](https://01a1c78c-8f0c-74d3-e258-bbc95be5f54d.share.connect.posit.cloud/) · **EDA report:** [ragurajakrishnan15.github.io/Ops-brain/eda.html](https://ragurajakrishnan15.github.io/Ops-brain/eda.html)
 
 ## Architecture
 
