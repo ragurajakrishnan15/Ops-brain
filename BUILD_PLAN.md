@@ -201,5 +201,6 @@ products, reproducibility, Git/CI, Posit Connect, supply chain).
    slow tables precomputed into the bundle (cold start 23 s → 13 s including download);
    assistant limits (10/visit, 200/day, 500 chars); root `streamlit_app.py` entry point for Posit Connect Cloud.
    **Verified:** a fresh copy with no data downloads the bundle and renders every page without errors.
-5. [ ] Publish the `data-v1` release asset; enable GitHub Pages (`main` / `docs`); publish on Posit Connect
+5. [x] `data-v1` release asset published (checksum verified); GitHub Pages live (`main` / `docs`, root redirects to the report).
+6. [ ] Publish on Posit Connect
    Cloud with `GOOGLE_API_KEY`; add the live link to the README.
