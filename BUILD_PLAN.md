@@ -1,7 +1,7 @@
 # OpsBrain — Build Plan to Completion
 
-Status as of 2026-11-10: all modules are scaffolded (~1,800 lines), but the pipeline does not
-produce usable data end to end. This plan orders the work so each phase leaves the project
+Status as of 2026-11-10 (start): all modules were scaffolded (~1,800 lines), but the pipeline did not
+produce usable data end to end. **Phases 0–6 are now complete**; open items are listed at the end of Phase 6. This plan orders the work so each phase leaves the project
 runnable and verifiable before the next one starts.
 
 **Definition of done:** a fresh clone → `docker compose up` (or the local steps) → dashboard shows
@@ -122,30 +122,38 @@ SET/INSTALL/multi-statement/`read_csv`. Live — `pytest -m llm` (5 doc + 5 data
 series switching); `streamlit run` boots and `/_stcore/health` returns ok. Note: `AppTest` in Streamlit 1.42 doesn't execute
 `st.navigation` pages, so views are tested as standalone scripts.
 
-## Phase 5 — Tests & CI (1 day)
+## Phase 5 — Tests & CI ✅ done 2026-11-10
 
-1. Fixture: 2,000-row sample CSV in `tests/fixtures/` → temp DuckDB via `DUCKDB_PATH` override.
-2. Tests: date parsing, calendar densification, no-leakage (feature at t uses only ≤ t−1), risk pct ≤ 100,
-   apostrophe category round-trip, walk-forward with multiple rows per date, SQL-agent guard rejects `DROP`/`read_csv`,
-   ingest idempotency (no duplicate chunks).
-3. `ruff check --fix` + `ruff format`; ensure lint is clean.
-4. CI: pip cache; CPU-only torch index (`--extra-index-url https://download.pytorch.org/whl/cpu`); coverage report;
-   Docker build job.
+1. [x] Synthetic DataCo-format fixtures instead of a sample of the Kaggle file (no licensed data in the repo):
+   40-day pipeline fixture (`test_pipeline_sql.py`) and a 450-day forecasting fixture (`test_forecasting.py`).
+2. [x] Tests: date parsing, densification, canceled/fraud exclusion, no-leakage, SQL↔Python feature parity, apostrophe names,
+   risk % bounds, department sums, quality rules (outlier count cross-checked in pandas), end-to-end train → MLflow → forecast
+   → SHAP (contributions add up) → alerts, recursive day 1 = one-step, SQL sandbox, retry loop, ingest idempotency,
+   retrieval top-3 on the real docs, headless dashboard rendering. 58 pass locally; 10 live-Gemini tests skip without a key.
+3. [x] `ruff check` + `ruff format --check` clean on `src/ tests/ scripts/` (was 28 lint errors).
+4. [x] CI: pip + Hugging Face caches, CPU-only torch, coverage gate (`--cov-fail-under=70`), import checks, coverage artifact,
+   Docker build job (Buildx with GHA cache). `requirements-dev.txt` split from runtime `requirements.txt`.
 
-**Check:** `pytest --cov=src` ≥ 70% on `data_pipeline` + `forecasting`; CI green.
+**Check:** coverage of `data_pipeline` + `forecasting` + `rag_assistant` + `utils` is **79%** with the real data hidden
+(CI conditions). CI itself hasn't run yet — it runs on the first push.
 
-## Phase 6 — Packaging, docs, release (½–1 day)
+## Phase 6 — Packaging, docs, release ✅ done 2026-11-10 (push to GitHub pending)
 
-1. Dockerfile: install `curl` (or use a Python healthcheck), CPU torch, non-root user, `.dockerignore`
-   (exclude `data/raw`, `.venv`, `mlruns`).
-2. `entrypoint.sh`: run `setup_data.py` + a quick training run if the warehouse is missing.
-3. docker-compose: drop `version:`, make `.env` optional (`required: false`), optional `mlflow ui` service on 5000.
-4. Render `notebooks/eda.qmd` with Quarto → `docs/eda.html`; either add an R chunk (needs R + `reticulate`) or
-   change the README to "Python".
-5. README: correct the talking points (character-based chunks, the actual feature list), add screenshots, results table, architecture.
-6. `git init` → GitHub repo → tag `v1.0.0`; optional deploy to Streamlit Community Cloud (needs a hosted copy of the data).
-
----
+1. [x] Dockerfile: CPU-only torch, `xgboost-cpu` (drops ~470 MB of NCCL/CUDA), non-root `opsbrain` user, embedding model
+   baked in, Python healthcheck (no curl needed), `.dockerignore`. Image 4.1 GB (from 5.5 GB).
+2. [x] `scripts/bootstrap.py` as the container entrypoint: builds the warehouse / trains models only when missing.
+3. [x] docker compose: no obsolete `version:`, optional `.env`, named `mlruns` volume (MLflow stores absolute artifact paths,
+   so host-trained runs can't load in the container), `TRAIN_TRIALS`, optional `mlflow` profile on :5000.
+   **Verified:** `docker compose up` → trained 30 series in-container → healthy in ~4.5 min → forecasts load inside the container.
+4. [x] `notebooks/eda.qmd` rewritten: all 4 original "key findings" were contradicted by the data (no weekly seasonality; late
+   deliveries driven by shipping mode, not category; lag-7 correlation 0.89 pooled but 0.01 within category; discounts
+   don't move volume). Findings are now computed in code. Rendered with Quarto 1.11.9 → `docs/eda.html`. Python only.
+5. [x] README rewritten: real structure, Gemini setup, config table, results table, corrected talking points.
+6. [x] Config resolves relative paths against the project root; `.gitattributes` keeps LF endings.
+7. [x] `git init` + initial commit on `main`.
+8. [ ] Create the GitHub repo and push; tag `v1.0.0` once CI is green.
+9. [ ] Screenshots for the README (needs a browser session).
+10. [ ] Run `pytest -m llm` once a Gemini key is in `.env`.
 
 ## Suggested order & effort
 
@@ -167,7 +175,7 @@ series switching); `streamlit run` boots and `/_stcore/health` returns ok. Note:
 | DataCo dataset | Kaggle `shashwatwork/dataco-smart-supply-chain-for-big-data-analysis` | ✅ in `data/raw/` |
 | Python deps | PyPI (`requirements.txt`) | installed into `.venv` |
 | `tabulate` | PyPI | installed (needed by `DataFrame.to_markdown`) |
-| Embedding model `all-MiniLM-L6-v2` | Hugging Face Hub | pre-download to HF cache |
-| Quarto CLI | PyPI `quarto-cli` / github.com/quarto-dev/quarto-cli | install into `.venv` |
+| Embedding model `all-MiniLM-L6-v2` | Hugging Face Hub | ✅ in HF cache (and baked into the Docker image) |
+| Quarto CLI | github.com/quarto-dev/quarto-cli (zip; pip wheel fails on Windows) | ✅ `D:\opsbrain-project	ools\quarto` |
 | Gemini API key | aistudio.google.com/apikey (free tier) | **user must provide** |
-| R + reticulate | CRAN | only if keeping the "R" claim |
+| R + reticulate | CRAN | not needed — notebook and README are Python-only |
