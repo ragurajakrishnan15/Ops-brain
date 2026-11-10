@@ -36,19 +36,27 @@ with st.spinner(f"Forecasting {name}..."):
 metrics = get_forecast_accuracy(forecast_df)
 champion = meta["champion"]
 baseline_wape = meta["holdout"]["moving_average"]["wape"]
+last_actual = forecast_df.dropna(subset=["actual"])["order_date"].max()
+model_end = pd.Timestamp(meta["model_end_date"])
 
 st.caption(
     f"Champion method: **{METHOD_LABELS[champion]}** — lowest error across "
     f"{len(meta['backtest_origins'])} rolling 28-day backtests. Metrics are on the held-out last "
-    f"28 days (from {meta['holdout_start']}), which no model saw during training or selection. "
-    f"Models use data up to {meta['model_end_date']}."
+    f"28 days of this series (from {meta['holdout_start']}), which no model saw during training "
+    f"or selection. Last order in this series: {last_actual:%Y-%m-%d}."
 )
+if last_actual < model_end - pd.Timedelta(days=28):
+    st.warning(
+        f"**{name}** has no orders after {last_actual:%Y-%m-%d} — it looks discontinued, "
+        f"{(model_end - last_actual).days} days before the other series end ({meta['model_end_date']}). "
+        "The future forecast below assumes demand would have continued at its recent level."
+    )
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(
     "WAPE",
     f"{metrics['wape']:.1%}",
-    delta=f"{metrics['wape'] - baseline_wape:+.1%} vs 28-day avg",
+    delta=f"{100 * (metrics['wape'] - baseline_wape):+.1f} pts vs 28-day avg",
     delta_color="inverse",
     help="Weighted absolute percentage error: total |error| / total demand",
 )
@@ -138,4 +146,8 @@ with tab_drivers:
         row = features[features["order_date"].dt.date == day]
         explanation = explain_prediction(model, row, top_n=len(FEATURE_COLS))
         st.plotly_chart(shap_waterfall(explanation), use_container_width=True)
-        st.caption(f"Actual demand that day: {row['total_units'].iloc[0]:.0f} units.")
+        st.caption(
+            f"Actual demand that day: {row['total_units'].iloc[0]:.0f} units. The starting point is "
+            "the 28-day average plus the model's average correction; the 28-day average also appears "
+            "as a feature because the model uses it to decide how far to move away from it."
+        )

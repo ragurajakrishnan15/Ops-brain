@@ -38,8 +38,8 @@ for section in checks["section"].unique():
         column_config={
             "status": st.column_config.TextColumn("Status", width="small"),
             "rule": st.column_config.TextColumn("Rule", width="large"),
-            "failing_rows": st.column_config.NumberColumn("Failing rows", format="%d"),
-            "total_rows": st.column_config.NumberColumn("Rows checked", format="%d"),
+            "failing_rows": st.column_config.NumberColumn("Failing rows"),
+            "total_rows": st.column_config.NumberColumn("Rows checked"),
             "failing_pct": st.column_config.NumberColumn("Failing %", format="%.2f%%"),
         },
     )

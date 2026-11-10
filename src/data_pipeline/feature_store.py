@@ -129,13 +129,14 @@ def get_summary_stats() -> pd.DataFrame:
         return con.execute("""
             SELECT
                 category_name,
-                COUNT(*) AS days_of_data,
+                ANY_VALUE(department_name) AS department_name,
+                COUNT(*) FILTER (WHERE NOT is_filled) AS active_days,
                 ROUND(AVG(total_units), 1) AS avg_daily_units,
                 ROUND(STDDEV(total_units), 1) AS std_daily_units,
                 ROUND(SUM(total_revenue), 0) AS total_revenue,
                 MIN(order_date) AS first_date,
                 MAX(order_date) AS last_date
-            FROM demand_features
+            FROM daily_demand
             GROUP BY category_name
             ORDER BY total_revenue DESC
         """).fetchdf()

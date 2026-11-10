@@ -28,7 +28,11 @@ col3.metric("Categories", f"{kpis['categories']}")
 col4.metric(
     "Late deliveries", f"{kpis['late_pct']:.1f}%", help="Share of order lines delivered late"
 )
-col5.metric("Data range", f"{kpis['first_date']:%b %Y} – {kpis['last_date']:%b %Y}")
+col5.metric(
+    "Data range",
+    f"{kpis['first_date']:%Y}–{kpis['last_date']:%y}",
+    help=f"Orders from {kpis['first_date']:%d %b %Y} to {kpis['last_date']:%d %b %Y}",
+)
 
 st.subheader("Monthly demand by department")
 monthly = data.monthly_units()
@@ -40,6 +44,8 @@ fig = px.area(
     labels={"month": "", "units": "Units", "department_name": "Department"},
     template="plotly_white",
     height=380,
+    # 11 departments: the default 10-color palette would repeat colors
+    color_discrete_sequence=px.colors.qualitative.Dark24,
 )
 fig.add_vline(x=MODEL_END_DATE, line=dict(color="#6b7280", dash="dot", width=1))
 fig.add_annotation(
@@ -57,7 +63,8 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.subheader("Forecast alerts")
 try:
-    health = data.forecast_health()
+    with st.spinner("Checking forecast health for all series (first load takes ~15 s)..."):
+        health = data.forecast_health()
 except Exception:
     health = None
 if health is None or health.empty:
@@ -74,10 +81,27 @@ else:
             use_container_width=True,
             hide_index=True,
             column_config={
+                "level": st.column_config.TextColumn("Level"),
+                "series": st.column_config.TextColumn("Series"),
                 "avg_daily_units": st.column_config.NumberColumn("Avg units/day", format="%.1f"),
                 "holdout_wape": st.column_config.NumberColumn("Holdout WAPE", format="%.2f"),
+                "alerts": st.column_config.TextColumn("Why", width="large"),
             },
         )
 
 st.subheader("Category summary")
-st.dataframe(stats, use_container_width=True, hide_index=True)
+st.dataframe(
+    stats,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "category_name": st.column_config.TextColumn("Category"),
+        "department_name": st.column_config.TextColumn("Department"),
+        "active_days": st.column_config.NumberColumn("Days with orders"),
+        "avg_daily_units": st.column_config.NumberColumn("Avg units/day", format="%.1f"),
+        "std_daily_units": st.column_config.NumberColumn("Std units/day", format="%.1f"),
+        "total_revenue": st.column_config.NumberColumn("Revenue ($)", format="dollar"),
+        "first_date": st.column_config.DateColumn("First order"),
+        "last_date": st.column_config.DateColumn("Last order"),
+    },
+)

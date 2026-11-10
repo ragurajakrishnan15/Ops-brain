@@ -197,6 +197,14 @@ def shap_waterfall(explanation: dict, max_features: int = 6) -> go.Figure:
     values.append(0)
     measures.append("total")
 
+    # Zoom the axis to where the forecast actually moves; from zero the feature bars are slivers
+    path = np.cumsum(values[:-1])
+    lo, hi = (
+        float(min(path.min(), explanation["predicted_value"])),
+        float(max(path.max(), explanation["predicted_value"])),
+    )
+    pad = max((hi - lo) * 0.35, 0.5)
+
     fig = go.Figure(
         go.Waterfall(
             orientation="h",
@@ -208,6 +216,7 @@ def shap_waterfall(explanation: dict, max_features: int = 6) -> go.Figure:
             increasing={"marker": {"color": COLORS["primary"]}},
             totals={"marker": {"color": COLORS["gray"]}},
             textposition="outside",
+            cliponaxis=False,
             text=[f"{start:.1f}"]
             + [f"{v:+.2f}" for v in values[1:-1]]
             + [f"{explanation['predicted_value']:.1f}"],
@@ -219,7 +228,8 @@ def shap_waterfall(explanation: dict, max_features: int = 6) -> go.Figure:
         f"(28-day average: {explanation['baseline_units']:.1f})",
         template="plotly_white",
         height=60 + 38 * len(labels),
-        margin=dict(l=160, r=60, t=50, b=30),
+        margin=dict(l=160, r=70, t=50, b=40),
+        xaxis=dict(range=[lo - pad, hi + pad], title="Units (axis zoomed to the change)"),
         yaxis=dict(autorange="reversed"),
         showlegend=False,
     )

@@ -23,10 +23,14 @@ min_units = st.slider(
     "Minimum average daily units",
     0.0,
     float(risk_df["avg_daily_units"].max()),
-    0.0,
+    5.0,
     step=0.5,
-    help="Hide low-volume categories, whose volatility score is dominated by noise",
+    help="Hides low-volume categories by default: their volatility hits the cap from noise alone, "
+    "which pushes them to the top of the ranking. Drag to 0 to see all categories.",
 )
+hidden = int((risk_df["avg_daily_units"] < min_units).sum())
+if hidden:
+    st.caption(f"{hidden} categories under {min_units:g} units/day hidden.")
 view = risk_df[risk_df["avg_daily_units"] >= min_units]
 
 st.subheader("Highest risk categories")
