@@ -1,0 +1,241 @@
+---
+title: "OpsBrain — Exploratory Data Analysis"
+author: "Raguraja Krishnan Natarajan Mangaleshwaran"
+format:
+  html:
+    code-fold: true
+    toc: true
+    theme: cosmo
+jupyter: python3
+---
+
+## Overview
+
+This notebook explores the DataCo Smart Supply Chain dataset to understand
+demand patterns, shipping performance, and product category dynamics before
+building the forecasting model. Every finding below is computed from the
+warehouse built by `scripts/setup_data.py`.
+
+```{python}
+import duckdb
+import pandas as pd
+import plotly.express as px
+import plotly.io as pio
+from pathlib import Path
+
+# Load plotly.js once from its CDN instead of embedding a copy in every chart
+pio.renderers.default = "notebook_connected"
+
+# Connect to the DuckDB warehouse
+DB_PATH = str(Path("../data/processed/warehouse.duckdb"))
+con = duckdb.connect(DB_PATH, read_only=True)
+q = lambda sql: con.execute(sql).fetchdf()
+MODEL_END_DATE = "2017-10-02"
+```
+
+## Dataset Overview
+
+```{python}
+overview = q("""
+    SELECT COUNT(*) AS order_lines,
+           COUNT(DISTINCT order_id) AS orders,
+           COUNT(DISTINCT category_name) AS categories,
+           MIN(order_date) AS first_date,
+           MAX(order_date) AS last_date,
+           COUNT(*) FILTER (WHERE NOT is_valid_demand) AS canceled_or_fraud_lines
+    FROM orders
+""")
+overview.T.rename(columns={0: "value"})
+```
+
+## Demand by Category
+
+```{python}
+category_demand = q("""
+    SELECT
+        category_name,
+        COUNT(*) AS order_lines,
+        SUM(quantity) AS total_units,
+        ROUND(SUM(revenue), 0) AS total_revenue,
+        ROUND(AVG(unit_price), 2) AS avg_price
+    FROM orders
+    WHERE is_valid_demand
+    GROUP BY category_name
+    ORDER BY total_revenue DESC
+    LIMIT 15
+""")
+
+fig = px.bar(
+    category_demand,
+    x="total_revenue",
+    y="category_name",
+    orientation="h",
+    title="Revenue by Product Category (Top 15, excluding canceled/fraud)",
+    labels={"total_revenue": "Total Revenue ($)", "category_name": "Category"},
+)
+fig.update_layout(yaxis=dict(autorange="reversed"), height=500)
+fig.show()
+```
+
+## A Structural Break in October 2017
+
+```{python}
+monthly = q("""
+    SELECT DATE_TRUNC('month', order_date) AS month,
+           SUM(total_units) AS units,
+           COUNT(DISTINCT category_name) FILTER (WHERE total_units > 0) AS active_categories
+    FROM daily_demand
+    GROUP BY 1 ORDER BY 1
+""")
+fig = px.line(monthly, x="month", y="units", title="Monthly Units Sold",
+              labels={"month": "", "units": "Units"}, markers=True)
+fig.add_vline(x=MODEL_END_DATE, line_dash="dot")
+fig.show()
+
+before = monthly[monthly["month"] < "2017-10-01"].tail(6)["units"].mean()
+after = monthly[monthly["month"] >= "2017-11-01"]["units"].mean()
+print(f"Average monthly units, 6 months before Oct 2017: {before:,.0f}")
+print(f"Average monthly units, Nov 2017 – Jan 2018:      {after:,.0f} ({after / before - 1:+.0%})")
+```
+
+After 2017-10-02 the catalog changes: most long-running categories stop and a
+handful of new ones appear, while total volume falls sharply. Forecasting models
+are therefore trained and evaluated only on data up to `MODEL_END_DATE`.
+
+## Is There Weekly Seasonality?
+
+```{python}
+weekday = q(f"""
+    SELECT EXTRACT(DOW FROM order_date) AS dow, AVG(units) AS avg_units
+    FROM (SELECT order_date, SUM(total_units) AS units
+          FROM daily_demand WHERE order_date <= '{MODEL_END_DATE}' GROUP BY 1)
+    GROUP BY 1 ORDER BY 1
+""")
+weekday["day"] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+spread = weekday["avg_units"].max() / weekday["avg_units"].min() - 1
+fig = px.bar(weekday, x="day", y="avg_units", title="Average Daily Units by Weekday",
+             labels={"day": "", "avg_units": "Units / day"})
+fig.show()
+print(f"Busiest vs. quietest weekday: {spread:.1%} difference")
+```
+
+## Shipping Performance
+
+```{python}
+shipping = q("""
+    SELECT
+        shipping_mode,
+        COUNT(*) AS order_lines,
+        ROUND(AVG(planned_ship_days), 1) AS avg_planned_days,
+        ROUND(AVG(actual_ship_days), 1) AS avg_actual_days,
+        ROUND(100.0 * AVG(late_delivery_risk), 1) AS late_pct
+    FROM orders
+    GROUP BY shipping_mode
+    ORDER BY late_pct DESC
+""")
+shipping
+```
+
+## Late Delivery by Category
+
+```{python}
+late_by_category = q("""
+    SELECT category_name, COUNT(*) AS order_lines,
+           ROUND(100.0 * AVG(late_delivery_risk), 1) AS late_pct
+    FROM orders
+    GROUP BY category_name
+    HAVING COUNT(*) >= 1000
+    ORDER BY late_pct DESC
+""")
+fig = px.bar(
+    late_by_category, x="late_pct", y="category_name", orientation="h",
+    title="Late Delivery Rate by Category (categories with 1,000+ order lines)",
+    labels={"late_pct": "Late Delivery %", "category_name": "Category"},
+    range_x=[0, 100],
+)
+fig.update_layout(yaxis=dict(autorange="reversed"), height=500)
+fig.show()
+print(f"Range across these categories: {late_by_category['late_pct'].min()}% – "
+      f"{late_by_category['late_pct'].max()}%")
+```
+
+## Do Lag Features Carry Signal?
+
+Pooled across categories, lagged demand correlates strongly with today's demand —
+but that mostly reflects categories having different *levels*. Within a single
+category, the question is whether yesterday or last week says anything about today.
+
+```{python}
+corr = q(f"""
+    SELECT
+        CORR(lag_7d_units, total_units) AS pooled_lag7,
+        (SELECT AVG(c) FROM (
+            SELECT CORR(lag_7d_units, total_units) AS c
+            FROM demand_features WHERE order_date <= '{MODEL_END_DATE}'
+            GROUP BY category_name HAVING COUNT(*) >= 365)) AS within_category_lag7,
+        (SELECT AVG(c) FROM (
+            SELECT CORR(lag_1d_units, total_units) AS c
+            FROM demand_features WHERE order_date <= '{MODEL_END_DATE}'
+            GROUP BY category_name HAVING COUNT(*) >= 365)) AS within_category_lag1
+    FROM demand_features
+    WHERE order_date <= '{MODEL_END_DATE}'
+""")
+corr.round(3)
+```
+
+## Does Discounting Move Volume?
+
+```{python}
+discount = q("""
+    SELECT AVG(c) AS avg_within_category_corr
+    FROM (SELECT CORR(avg_discount, total_units) AS c
+          FROM daily_demand WHERE NOT is_filled GROUP BY category_name)
+""")
+discount.round(3)
+```
+
+## Forecast Results
+
+```{python}
+import sys
+sys.path.insert(0, str(Path("..").resolve()))
+from src.forecasting.predict import list_trained_series
+
+results = list_trained_series()
+if results.empty:
+    print("No trained models yet — run: python -m src.forecasting.train")
+else:
+    summary = results.assign(
+        xgb_minus_ma28=lambda d: d["holdout_wape"] - d["holdout_wape_moving_average"]
+    )[["level", "name", "champion", "holdout_wape", "holdout_wape_moving_average",
+       "xgb_minus_ma28", "holdout_coverage"]]
+    display(summary.round(3))
+    print(f"Champion = XGBoost on {(results['champion'] == 'xgboost').sum()} of {len(results)} series; "
+          f"mean 95% interval coverage {results['holdout_coverage'].mean():.0%}")
+```
+
+## Key Findings
+
+```{python}
+findings = [
+    f"**Structural break:** monthly volume changes {after / before - 1:+.0%} after October 2017 "
+    "as the catalog changes, so models use data up to 2017-10-02 only.",
+    f"**No weekly seasonality:** the busiest and quietest weekdays differ by {spread:.1%}.",
+    f"**Late deliveries depend on shipping mode, not category:** categories range only "
+    f"{late_by_category['late_pct'].min()}–{late_by_category['late_pct'].max()}% late, while "
+    f"{shipping.iloc[0]['shipping_mode']} is {shipping.iloc[0]['late_pct']}% late "
+    f"(planned {shipping.iloc[0]['avg_planned_days']} days, actual {shipping.iloc[0]['avg_actual_days']}).",
+    f"**Lags carry almost no within-category signal:** lag-7 correlation is "
+    f"{corr['pooled_lag7'].iloc[0]:.2f} pooled but {corr['within_category_lag7'].iloc[0]:.2f} within a category.",
+    f"**Discounts don't move daily volume:** average within-category correlation "
+    f"{discount['avg_within_category_corr'].iloc[0]:.2f}.",
+    "**Implication for forecasting:** demand is close to noise around a stable level, so a tuned "
+    "XGBoost model can at best match a 28-day moving average — which is what the holdout results show.",
+]
+from IPython.display import Markdown
+Markdown("\n".join(f"{i}. {f}" for i, f in enumerate(findings, 1)))
+```
+
+```{python}
+con.close()
+```

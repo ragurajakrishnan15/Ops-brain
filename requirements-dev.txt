@@ -1,0 +1,13 @@
+-r requirements.txt
+
+# Testing
+pytest==8.3.5
+pytest-cov==6.1.1
+
+# Linting
+ruff==0.11.12
+
+# Rendering notebooks/eda.qmd with Quarto (Quarto itself: https://quarto.org/docs/get-started/)
+ipykernel==6.29.5
+nbformat==5.10.4
+nbclient==0.10.2

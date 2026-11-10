@@ -1,0 +1,44 @@
+# Data
+data/raw/
+data/processed/
+*.duckdb
+*.duckdb.wal
+
+# ChromaDB
+data/processed/chroma_store/
+
+# MLflow
+mlruns/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage output
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+# Quarto render cache
+notebooks/.quarto/

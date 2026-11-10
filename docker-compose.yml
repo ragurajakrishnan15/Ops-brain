@@ -1,0 +1,33 @@
+services:
+  opsbrain:
+    build: .
+    image: opsbrain:latest
+    ports:
+      - "8501:8501"
+    volumes:
+      # Raw CSV in, warehouse + vector store out (put DataCoSupplyChainDataset.csv in data/raw/)
+      - ./data:/app/data
+      # Models trained inside the container. A named volume, because MLflow stores absolute
+      # artifact paths, so runs trained on the host can't be loaded in the container.
+      - mlruns:/app/mlruns
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TRAIN_TRIALS: ${TRAIN_TRIALS:-10}
+    restart: unless-stopped
+
+  # Optional experiment browser: docker compose --profile mlflow up
+  mlflow:
+    image: opsbrain:latest
+    profiles: ["mlflow"]
+    command: mlflow ui --backend-store-uri file:///app/mlruns --host 0.0.0.0 --port 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlruns:/app/mlruns
+    depends_on:
+      - opsbrain
+
+volumes:
+  mlruns:

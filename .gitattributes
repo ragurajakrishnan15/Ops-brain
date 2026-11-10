@@ -1,0 +1,4 @@
+# Keep LF line endings in every checkout (CI and Docker builds run on Linux)
+* text=auto eol=lf
+*.woff binary
+*.png binary

@@ -1,0 +1,19 @@
+# Keep the build context small; data and models come from volumes at runtime
+.git
+.github
+.venv
+venv
+.env
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov
+data/raw
+data/processed
+mlruns
+notebooks/*_files
+notebooks/.quarto
+docs/*.html
